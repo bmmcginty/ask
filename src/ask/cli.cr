@@ -52,5 +52,12 @@ module Ask
     response = m.send conversation
     File.rename "question", question_filename
     File.write answer_filename, response
+    if File.exists?("answer") && !File.symlink?("answer")
+      File.delete "answer"
+    end
+    if !File.exists?("answer")
+      File.symlink answer_filename, "answer"
+    end
   end # def
-end   # module
+
+end # module
