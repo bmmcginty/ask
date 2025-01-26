@@ -68,7 +68,9 @@ module Ask
       idx = -1
       @messages.each do |i|
         idx += 1
-        if @messages[0..idx].sum { |i| i.content.size } > min_length
+        # 1 token ~ 4 chars
+        rolling_char_sum = @messages[0..idx].sum { |i| i.content.size }
+        if (rolling_char_sum / 4) >= min_length
           c << idx
         end # if
       end   # each message
