@@ -1,4 +1,4 @@
-require "../../../../nghttp/src/nghttp"
+require "nghttp/src/nghttp"
 
 module Ask
   class ClaudeMessage

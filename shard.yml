@@ -1,0 +1,13 @@
+name: ask
+version: 0.1.0
+
+authors:
+  - Brandon McGinty <bmmcginty@bmcginty.us>
+
+license: MIT
+
+crystal: '>= 1.14'
+
+dependencies:
+  nghttp:
+    github: 'bmmcginty/nghttp'
