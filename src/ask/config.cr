@@ -4,8 +4,10 @@ module Ask
   class Config
     @keys = Hash(String, String).new
     @default_model : String
-    getter default_model
     @model_to_provider = Hash(String, String).new
+    @prompt_caching = true
+    getter default_model
+    property prompt_caching
 
     def initialize
       providers = [] of String

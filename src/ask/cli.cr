@@ -18,6 +18,9 @@ module Ask
     puts "running"
     c = Config.new
     files = Dir.children "."
+    if files.includes?(".nocache")
+      c.prompt_caching = false
+    end
     if !files.includes?("question")
       raise Exception.new("no question file found")
     end

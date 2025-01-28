@@ -117,7 +117,9 @@ module Ask
 
     def send(conversation)
       msgs = ClaudeMessages.new(self, conversation)
-      msgs.mark_cacheable
+      if @config.prompt_caching
+        msgs.mark_cacheable
+      end
       key = api_key
       h = HTTP::Headers.new
       h["Content-Type"] = "application/json"
