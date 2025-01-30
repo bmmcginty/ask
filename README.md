@@ -32,16 +32,52 @@ Your question will be put in a sequentially numbered file ending with `q`,
 and the AI's answer will be put in a sequentially numbered file ending with `a`.
 Each new answer will also be linked to `answer`, so long as answer does not exist, or is a symlink.
 
+### Quickstart
+
 ```
+mkdir ai/weather
+cd ai/weather
+echo "Tell me about the hottest place on earth." > question
+ask
+cat answer
+```
+
+### Longer Example
+
+```
+mkdir ai
+cd ai
 mkdir weather
 cd weather
 echo "What is the coldest city on earth?" > question
 ask
 cat 02a
+# same as 02a
+cat answer
 echo "Tell me more about the place(s) you mentioned above." > question
 ask
-cat 04a
+# view new answer, linked to 04a
+cat answer
+# The last 4 question/answer files will no longer be sent to the AI.
+ask restart
+echo "Tell me how to cook pasta." > question
+ask
+# move that question/answer to a cooking directory
+mkdir ../cooking
+mv 03q 04a ../cooking/
+# delete your restart file to reinclude your previous history
+rm .restart
+echo "Tell me even more about the above places." > question
+ask
 ```
+
+### Truncate History
+
+If you start a new conversation in an existing directory, you might want to only send new messages to the AI.
+You might also want to do this if you end up with a really long conversation.
+Running `ask restart` will basically create a fresh start to your conversation.
+Your previous questions and answers are saved, but that content won't be sent to the AI during future chats.
+This restart setting is per-directory.
 
 ### Delete Content
 
