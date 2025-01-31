@@ -2,6 +2,11 @@
 
 A command-line interface for interacting with AI language models. Currently supports Anthropic's Claude, with more providers planned.
 
+## Disclaimer
+
+This file has been AI editted and human verified.
+No other files in this project have been touched by AI.
+
 ## Quick Start
 
 ```bash
