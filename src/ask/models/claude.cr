@@ -28,6 +28,14 @@ module Ask
               case @message.type
               when "text"
                 b.field "text", @message.content
+              when "image", "document"
+                b.field "source" do
+                  b.object do
+                    b.field "type", "base64"
+                    b.field "media_type", @message.media_type
+                    b.field "data", @message.content
+                  end # source
+                end   # source field
               else
                 raise Exception.new("unknown type #{@message.type}")
               end

@@ -56,6 +56,13 @@ cat answer
 - Answers are saved as alternating sequential files ending in `a` (e.g., `02a`, `04a`)
 - Latest answer is always symlinked to `answer`
 
+### Attachments
+
+- Lines like <<filename will attach filename to the question.
+- These lines are not sent to the AI.
+- After use, attachments are copied to the local directory for reuse and later reference.
+- Attachments are Xq.bY where X is your question's sequence number and Y is your attachment's sequence number for that question.
+
 ### Advanced Features
 
 #### Conversation Management
@@ -106,6 +113,14 @@ rm .restart
 
 # Continue previous conversation
 echo "Tell me even more about the above places." > question
+ask
+
+# ask about an image from the web
+mkdir ../web-img
+cd web-img
+wget "https://example.com/image.png"
+echo '<<image.png' > question
+echo "Describe this image." >> question
 ask
 ```
 

@@ -1,7 +1,7 @@
 require "./src/ask/cli"
 
 def main
-  Ask.cli
+  Ask::Cli.new.run
 end
 
 main
