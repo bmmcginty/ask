@@ -39,6 +39,8 @@ module Ask
     def get_model(config, model)
       short = model.split("-")[0].downcase
       cls = case short
+            when "gemini"
+              Gemini
             when "claude"
               Claude
             else

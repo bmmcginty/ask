@@ -30,15 +30,20 @@ cat answer
 
 2. Configure credentials in `~/.creds.yml`:
    ```yaml
+   # put keys here for whatever engines you have access to
    claude:
+     api_key: "your_api_key_here"
+   gemini:
      api_key: "your_api_key_here"
    ```
 
 3. Configure settings in `~/.ask.yml`:
    ```yaml
    default_model: "claude-3-5-sonnet-latest"
+   # or "gemini-1.5-pro
    providers:
      claude: {}
+     gemini: {}
    ```
 
 ## Usage
@@ -135,5 +140,6 @@ Feel free to open issues for:
 
 Currently supported providers:
 - Anthropic Claude
+- Google gemini
 
 More providers planned - open an issue to request support for additional AI models.
