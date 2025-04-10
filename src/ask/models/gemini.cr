@@ -1,12 +1,33 @@
 require "nghttp/src/nghttp"
 
 module Ask
+  class GeminiTools
+    @tools : Array(Tool)
+
+    def initialize(@tools)
+    end
+
+    def to_json(b : JSON::Builder)
+      b.array do
+        b.object do
+          b.field "functionDeclarations" do
+            b.array do
+              @tools.each do |t|
+                b.object do
+                  b.field "name", t.name
+                  b.field "description", t.description
+                  b.field "parameters", t.schema
+                end # object
+              end   # each t
+            end     # array
+          end       # field
+        end         # object
+      end           # array
+    end             # def
+  end               # class
+
   class GeminiMessage
     @message : Message
-
-    def content
-      @message.content
-    end
 
     def initialize(@message)
     end
@@ -22,14 +43,37 @@ module Ask
         b.field "parts" do
           b.array do
             b.object do
-              case @message.type
-              when "text"
-                b.field "text", @message.content
-              when "image", "document"
+              case @message
+              when ToolCallMessage
+                m = @message.as(ToolCallMessage)
+                b.field "functionCall" do
+                  b.object do
+                    b.field "name", m.name
+                    b.field "args", m.parameters
+                  end # object
+                end   # function call
+              when ToolReturnMessage
+                m = @message.as(ToolReturnMessage)
+                b.field "functionResponse" do
+                  b.object do
+                    b.field "name", m.name
+                    b.field "response" do
+                      b.object do
+                        b.field "name", m.name
+                        b.field "response", m.response
+                      end # response object
+                    end   # response field
+                  end     # object
+                end       # function response
+              when TextMessage
+                m = @message.as(TextMessage)
+                b.field "text", m.text
+              when ImageMessage, PDFMessage
+                m = @message.as(MediaMessage)
                 b.field "inline_data" do
                   b.object do
-                    b.field "mime_type", @message.media_type
-                    b.field "data", @message.content
+                    b.field "mime_type", m.media_type
+                    b.field "data", m.base64
                   end # inline_data
                 end   # source object
               else
@@ -63,45 +107,64 @@ module Ask
 
   end # class
 
-  class Gemini
-    @config : Config
-    @model : String
-    @s : NGHTTP::Session
-    getter model
-
-    def initialize(@config, @model)
-      @s = NGHTTP::Session.new
-      @s.config.read_timeout = 120.seconds
+  class Gemini < Model
+    def self.match
+      /gemini.*/i
     end
 
-    def api_key
-      name = @model.split(/[-_]/)[0].downcase
-      @config.api_key(name)
+    def self.provider
+      "google"
     end
 
-    def send(conversation)
+    def send(conversation, tools)
       msgs = GeminiMessages.new(self, conversation)
       # prompt caching unavailable for <32768 tokens so will wait on this
       # @config.prompt_caching
       key = api_key
       h = HTTP::Headers.new
       h["Content-Type"] = "application/json"
-      data = {
-        "contents" => msgs,
-      }
-      File.write("req.json", data.to_json)
+      data = JSON.build do |b|
+        b.object do
+          if tools.size > 0
+            b.field "tools", GeminiTools.new(tools)
+          end # if
+          b.field "contents", msgs
+        end # object
+      end   # jb
+      do_on_request data
       j = nil
       @s.post(
         "https://generativelanguage.googleapis.com/v1beta/models/#{@model}:generateContent",
         params: {"key" => key},
         headers: h,
-        body: data.to_json) do |resp|
+        body: data) do |resp|
         j = resp.json
       end # request
-      File.write("resp.json", j.to_json)
+      do_on_response j.to_json
       j = j.not_nil!
-      text = j["candidates"][0]["content"]["parts"].as_a.map { |i| i["text"].as_s }
-      text.join("\n\n")
+      fc = j["candidates"][0]["content"]["parts"][0]["functionCall"]?
+      sr = j["candidates"][0]["finishReason"].as_s
+      stop_reason = if fc
+                      StopReason::ToolCall
+                    elsif sr == "STOP"
+                      StopReason::EndTurn
+                    else
+                      raise Exception.new("unknown finish reason")
+                    end # case
+      ret = [] of Message
+      j["candidates"][0]["content"]["parts"].as_a.each do |i|
+        if f = i["functionCall"]?
+          f = f.as_h
+          ret << ToolCallMessage.new(
+            name: f["name"].as_s,
+            parameters: f["args"])
+        elsif i["text"]?
+          ret << TextMessage.new(
+            role: "assistant",
+            text: i["text"].as_s)
+        end # if
+      end   # each
+      ({ret, stop_reason})
     end # def
   end   # class
 end     # module

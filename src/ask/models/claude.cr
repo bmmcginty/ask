@@ -1,11 +1,14 @@
 require "nghttp/src/nghttp"
 
 module Ask
+  class ClaudeTools
+  end
+
   class ClaudeMessage
     @message : Message
 
-    def content
-      @message.content
+    def quick_size
+      @message.quick_size
     end
 
     def initialize(@message)
@@ -24,16 +27,30 @@ module Ask
                   end # object
                 end   # cache_control field
               end     # if cache
-              b.field "type", @message.type
-              case @message.type
-              when "text"
-                b.field "text", @message.content
-              when "image", "document"
+              case @message
+              when ToolCallMessage
+                m = @message.as(ToolCallMessage)
+                b.field "type", "tool_use"
+                b.field "id", m.id
+                b.field "name", m.name
+                b.field "input", m.parameters
+              when ToolReturnMessage
+                m = @message.as(ToolReturnMessage)
+                b.field "type", "tool_result"
+                b.field "tool_use_id", m.id
+                b.field "content", m.response.to_json
+              when TextMessage
+                m = @message.as(TextMessage)
+                b.field "type", "text"
+                b.field "text", m.text
+              when PDFMessage, ImageMessage
+                m = @message.as(MediaMessage)
+                b.field "type", (@message.is_a?(PDFMessage) ? "document" : "image")
                 b.field "source" do
                   b.object do
                     b.field "type", "base64"
-                    b.field "media_type", @message.media_type
-                    b.field "data", @message.content
+                    b.field "media_type", m.media_type
+                    b.field "data", m.base64
                   end # source
                 end   # source field
               else
@@ -77,7 +94,7 @@ module Ask
       @messages.each do |i|
         idx += 1
         # 1 token ~ 4 chars
-        rolling_char_sum = @messages[0..idx].sum { |i| i.content.size }
+        rolling_char_sum = @messages[0..idx].sum { |i| i.quick_size }
         if (rolling_char_sum / 4) >= min_length
           c << idx
         end # if
@@ -107,23 +124,16 @@ module Ask
 
   end
 
-  class Claude
-    @config : Config
-    @model : String
-    @s : NGHTTP::Session
-    getter model
-
-    def initialize(@config, @model)
-      @s = NGHTTP::Session.new
-      @s.config.read_timeout = 120.seconds
+  class Claude < Model
+    def self.match
+      /claude.*/i
     end
 
-    def api_key
-      name = @model.split(/[-_]/)[0].downcase
-      @config.api_key(name)
+    def self.provider
+      "anthropic"
     end
 
-    def send(conversation)
+    def send(conversation, tools)
       msgs = ClaudeMessages.new(self, conversation)
       if @config.prompt_caching
         msgs.mark_cacheable
@@ -133,23 +143,60 @@ module Ask
       h["Content-Type"] = "application/json"
       h["x-api-key"] = key
       h["anthropic-version"] = "2023-06-01"
-      data = {
-        "model"      => @model,
-        "max_tokens" => 8192,
-        "messages"   => msgs,
-      }
-      File.write("req.json", data.to_json)
+      data = JSON.build do |builder|
+        builder.object do
+          builder.field "model", @model
+          builder.field "max_tokens", 8192
+          builder.field "messages", msgs
+          if tools.size > 0
+            builder.field "tools" do
+              builder.array do
+                tools.each do |i|
+                  builder.object do
+                    builder.field "name", i.name
+                    builder.field "description", i.description
+                    builder.field "input_schema", i.schema
+                  end # tool object
+                end   # each tool
+              end     # array
+            end       # tools
+          end         # if
+        end           # object
+      end             # builder
+      do_on_request data
       j = nil
       @s.post(
         "https://api.anthropic.com/v1/messages",
         headers: h,
-        body: data.to_json) do |resp|
+        body: data) do |resp|
         j = resp.json
       end # request
-      File.write("resp.json", j.to_json)
+      do_on_response j.to_json
       j = j.not_nil!
-      text = j["content"].as_a.map { |i| i["text"].as_s }
-      text.join("\n\n")
+      stop_reason = case j["stop_reason"].as_s
+                    when "end_turn"
+                      StopReason::EndTurn
+                    when "tool_use"
+                      StopReason::ToolCall
+                    else
+                      raise Exception.new("invalid stop reason")
+                    end
+      ret = [] of Message
+      j["content"].as_a.each do |i|
+        t = i["type"].as_s
+        case t
+        when "tool_use"
+          ret << ToolCallMessage.new(
+            id: i["id"].as_s,
+            name: i["name"].as_s,
+            parameters: i["input"])
+        when "text"
+          ret << TextMessage.new role: "assistant", text: i["text"].as_s
+        else
+          raise Exception.new("invalid message type #{i.to_json}")
+        end # case
+      end   # each
+      ({ret, stop_reason})
     end # def
   end   # class
 end     # module
