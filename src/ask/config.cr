@@ -18,15 +18,15 @@ module Ask
       @model_aliases.fetch(name, default)
     end
 
-    def initialize
-      load_config
-      load_creds
+    def initialize(config_filename, creds_filename)
+      load_config Path[config_filename].expand(home: true)
+      load_creds Path[creds_filename].expand(home: true)
     end
 
-    def load_config
+    def load_config(filename)
       all_aliases = Set(String).new
       dm = nil
-      File.open(Path["~/.ask.yml"].expand(home: true), "r") do |io|
+      File.open(filename, "r") do |io|
         cfg = YAML.parse io
         cfg["providers"].as_h.each do |provider, provider_cfg|
           provider_cfg["models"].as_h.each do |model, model_cfg|
@@ -54,9 +54,9 @@ module Ask
       @default_model = dm.not_nil!
     end
 
-    def load_creds
+    def load_creds(filename)
       providers = @model_to_provider.values.uniq
-      File.open(Path["~/.creds.yml"].expand(home: true), "r") do |io|
+      File.open(filename, "r") do |io|
         creds = YAML.parse io
         creds = creds["ask"]
         have = creds.as_h.keys

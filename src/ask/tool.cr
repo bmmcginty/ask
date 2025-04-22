@@ -1,5 +1,9 @@
-class Tools
-  @dir : Path
+class Ask::Tools
+  # holds tool definitions, schemas, and the actual binary (or a symlink to it)
+  # ~/.ask/tools
+  @definition_dir : Path
+  # ~/.ask/logs
+  @log_dir : Path
   @tools = [] of Tool
 
   getter tools
@@ -13,28 +17,30 @@ class Tools
     by_name_or_alias?(name).not_nil!
   end
 
-  def initialize(dir = "~/.ask/tools")
-    @dir = Path[dir].expand(home: true)
+  def initialize(definition_dir, log_dir)
+    @definition_dir = Path[definition_dir].expand(home: true)
+    @log_dir = Path[log_dir].expand(home: true)
   end
 
   def load_for_model(model)
-    names = Dir.children(@dir).select do |i|
-      p = File.read(@dir/i/"provider").strip
+    names = Dir.children(@definition_dir).select do |i|
+      p = File.read(@definition_dir/i/"provider").strip
       p == model.class.provider || p == "*"
     end # each
     @tools = load(names)
   end # def
 
   def load(names)
-    names.map { |name| Tool.new(@dir/name) }
+    names.map { |name| Tool.new(@definition_dir/name, @log_dir) }
   end
 end # class
 
-alias ToolSchemaValidator = Proc(String, JSON::Any, Bool)
+alias Ask::ToolSchemaValidator = Proc(Ask::Tool, String, JSON::Any, Bool)
 
-class Tool
+class Ask::Tool
   @alias = ""
   @dir : Path
+  @base_log_dir : Path
   @on_validate : ToolSchemaValidator?
   @schema : JSON::Any
   @real_schema : JSON::Any
@@ -50,7 +56,7 @@ class Tool
     @alias == "" ? nil : @alias
   end
 
-  def initialize(@dir)
+  def initialize(@dir, @base_log_dir)
     if File.exists?(@dir/"alias")
       @alias = File.read(@dir/"alias").strip
     end
@@ -64,6 +70,10 @@ class Tool
 
   def on_validate(&block : ToolSchemaValidator)
     @on_validate = block
+  end
+
+  def on_validate=(validator : ToolSchemaValidator)
+    @on_validate = validator
   end
 
   def jr(fn)
@@ -81,7 +91,7 @@ class Tool
   def from_ai(j : JSON::Any)
     tool_name = @dir.basename
     ts = Time.local.to_s("%Y-%m-%d/%H:%M:%S")
-    log_path = Path["~/.ask/logs/#{tool_name}/#{ts}"].expand(home: true)
+    log_path = @base_log_dir/"#{tool_name}/#{ts}"
     validate_against_json_schema j.to_json, @real_schema, "ai-to-tool schema validation failed"
     ret = nil
     Dir.mkdir_p log_path
@@ -110,7 +120,7 @@ class Tool
   def validate_against_json_schema(untrusted, schema, message)
     t = @on_validate
     if t
-      if !t.call(untrusted, schema)
+      if !t.call(self, untrusted, schema)
         raise Exception.new("#{message}\n#{schema}\n#{untrusted}")
       end # if
     end   # if t
