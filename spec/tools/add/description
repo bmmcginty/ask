@@ -1,0 +1,4 @@
+This tool adds two numbers together.
+it returns the result as a number.
+add(a=2, b=3) returns 5
+add(a=-100, b=3) returns -97
